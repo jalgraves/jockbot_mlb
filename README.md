@@ -2,7 +2,7 @@
 
 
 [![Total alerts](https://img.shields.io/lgtm/alerts/g/jalgraves/jockbot_mlb.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jalgraves/jockbot_mlb/alerts/)
-[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/jalgraves/jockbot_mlb.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jalgraves/jockbot_mlb/context:python)
+[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/jalgraves/jockbot_mlb.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jalgraves/jockbot_mlb/context:python) [![PyPI version](https://badge.fury.io/py/jockbot-mlb.svg)](https://badge.fury.io/py/jockbot-mlb) [![Maintainability](https://api.codeclimate.com/v1/badges/69872c9b3fc0e661a9c8/maintainability)](https://codeclimate.com/github/jalgraves/jockbot_mlb/maintainability)
 
 [![CircleCI](https://circleci.com/gh/jalgraves/jockbot_mlb.svg?style=svg)](https://circleci.com/gh/jalgraves/jockbot_mlb)
 
