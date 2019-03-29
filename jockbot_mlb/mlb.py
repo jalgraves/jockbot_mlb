@@ -96,7 +96,7 @@ async def _split_date_time(date_and_time):
     game_time = await _convert_time(time.strip('Z'))
     return date, game_time
 
-async def _parse_unplayed_game(game):
+async def _parse_game(game):
     game_data = {}
     date = game['gameDate']
     game_date, start_time = await _split_date_time(date)
@@ -104,34 +104,8 @@ async def _parse_unplayed_game(game):
     game_data['start_time'] = start_time
     game_data['home_team'] = game['teams']['home']['team']['name']
     game_data['away_team'] = game['teams']['away']['team']['name']
-    game_data['home_team_record'] = game['teams']['home']['leagueRecord']
-    game_data['away_team_record'] = game['teams']['away']['leagueRecord']
-    return game_data
-
-async def _parse_played_game(game):
-    game_data = {}
-    date = game['gameDate']
-    game_date, start_time = await _split_date_time(date)
-    game_data['date'] = game_date
-    game_data['start_time'] = start_time
-    game_data['home_team'] = game['teams']['home']['team']['name']
-    game_data['away_team'] = game['teams']['away']['team']['name']
-    game_data['home_team_score'] = game['teams']['home']['score']
-    game_data['away_team_score'] = game['teams']['away']['score']
-    game_data['home_team_record'] = game['teams']['home']['leagueRecord']
-    game_data['away_team_record'] = game['teams']['away']['leagueRecord']
-    return game_data
-
-async def _parse_live_game(game):
-    game_data = {}
-    date = game['gameDate']
-    game_date, start_time = await _split_date_time(date)
-    game_data['date'] = game_date
-    game_data['start_time'] = start_time
-    game_data['home_team'] = game['teams']['home']['team']['name']
-    game_data['away_team'] = game['teams']['away']['team']['name']
-    game_data['home_team_score'] = game['teams']['home']['score']
-    game_data['away_team_score'] = game['teams']['away']['score']
+    game_data['home_team_score'] = game['teams']['home'].get('score')
+    game_data['away_team_score'] = game['teams']['away'].get('score')
     game_data['home_team_record'] = game['teams']['home']['leagueRecord']
     game_data['away_team_record'] = game['teams']['away']['leagueRecord']
     return game_data
@@ -144,6 +118,7 @@ class MLB:
     def __init__(self, team=None):
         self._team = team
         self._loop = asyncio.get_event_loop()
+        self.todays_games = []
         self.todays_unplayed_games = []
         self.todays_completed_games = []
         self.live_games = []
@@ -172,28 +147,27 @@ class MLB:
             game = game['games'][0]
             game_type = await _game_type(game)
             game_state = await _game_state(game)
-            if game_type == 'R' and game_state == 'Preview':
-                game_data = await _parse_unplayed_game(game)
-                self.remaining_games.append(game_data)
-            elif game_type == 'R' and game_state == 'Final':
-                game_data = await _parse_played_game(game)
-                self.played_games.append(game_data)
-            elif game_type == 'R' and game_state == 'Live':
-                game_data = await _parse_live_game(game)
-                self.live_games.append(game_data)
+            if game_type == 'R':
+                game_data = await _parse_game(game)
+                if game_state == 'Preview':
+                    self.remaining_games.append(game_data)
+                elif game_state == 'Live':
+                    self.live_games.append(game_data)
+                elif game_state == 'Final':
+                    self.played_games.append(game_data)
 
     async def _parse_todays_games(self, game):
         game_type = await _game_type(game)
         game_state = await _game_state(game)
-        if game_type == 'R' and game_state == 'Preview':
-            game_data = await _parse_unplayed_game(game)
-            self.todays_unplayed_games.append(game_data)
-        elif game_type == 'R' and game_state == 'Final':
-            game_data = await _parse_played_game(game)
-            self.todays_completed_games.append(game_data)
-        elif game_type == 'R' and game_state == 'Live':
-            game_data = await _parse_live_game(game)
-            self.live_games.append(game_data)
+        if game_type == 'R':
+            game_data = await _parse_game(game)
+            if game_state == 'Preview':
+                self.todays_unplayed_games.append(game_data)
+            elif game_state == 'Live':
+                self.live_games.append(game_data)
+            elif game_state == 'Final':
+                self.todays_completed_games.append(game_data)
+            self.todays_games.append(game_data)
 
     async def _gather_todays_games(self):
         todays_date = datetime.datetime.strftime(DATE, '%Y-%m-%d')
@@ -207,7 +181,7 @@ class MLB:
         games = await _fetch_games_by_date(start_date=yesterday, end_date=yesterday)
         if games:
             for game in games:
-                game_data = await _parse_played_game(game)
+                game_data = await _parse_game(game)
                 self.yesterdays_games.append(game_data)
 
 
@@ -217,6 +191,8 @@ class MLBTeam(MLB):
         self._team = team_name
         self.id = self._team_id()
         self.name = self._team_name()
+        self.todays_games = []
+        self.live_games = []
         self.played_games = []
         self.remaining_games = []
         self.info = self._gather_data(self._parse_team_info)
@@ -300,5 +276,5 @@ if __name__ == '__main__':
     elapsed = time.perf_counter() - s
     mlb = MLB()
     sox = MLBTeam('red sox')
-    print(json.dumps(sox.played_games, indent=2))
+    print(mlb.yesterdays_games)
     print(f"{__file__} executed in {elapsed:0.2f} seconds.")
