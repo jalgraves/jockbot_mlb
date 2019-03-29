@@ -32,7 +32,6 @@ async def _fetch_data(session, url, params=None):
 
 async def _fetch_team_info(team_id=None):
     """Get general team information"""
-    print("fetching team info")
     url = f"{BASE_URL}teams/{team_id}"
     async with aiohttp.ClientSession() as session:
         data = await _fetch_data(session, url)
@@ -41,7 +40,7 @@ async def _fetch_team_info(team_id=None):
 
 
 async def _fetch_roster(team_id=None):
-    print("Fetching Roster")
+    """Get team's roster"""
     url = f"{BASE_URL}teams/{team_id}/roster"
     async with aiohttp.ClientSession() as session:
         data = await _fetch_data(session, url)
@@ -49,6 +48,7 @@ async def _fetch_roster(team_id=None):
 
 
 async def _fetch_games_by_date(start_date=None, end_date=None):
+    """Get all MLB games within a given time range"""
     params = {
         "sportId": "1",
         "startDate": start_date,
@@ -65,6 +65,7 @@ async def _fetch_games_by_date(start_date=None, end_date=None):
 
 
 async def _convert_time(time):
+    """Convert time from UTC to local and from 24 hour to 12"""
     from_zone = tz.tzutc()
     to_zone = tz.tzlocal()
     utc = datetime.datetime.strptime(time, '%H:%M:%S')
@@ -85,11 +86,6 @@ async def _double_header_check(game):
     except KeyError:
         return
 
-async def _game_type(game):
-    return game['gameType']
-
-async def _game_state(game):
-    return game['status']['abstractGameState']
 
 async def _split_date_time(date_and_time):
     date, time = date_and_time.split('T')
@@ -142,8 +138,8 @@ class MLB:
         return result
 
     async def _parse_todays_games(self, game):
-        game_type = await _game_type(game)
-        game_state = await _game_state(game)
+        game_type = game['gameType']
+        game_state = game['status']['abstractGameState']
         if game_type == 'R':
             game_data = await _parse_game(game)
             if game_state == 'Preview':
@@ -225,8 +221,8 @@ class MLBTeam(MLB):
         double_header = await _double_header_check(game)
         if not double_header:
             game = game['games'][0]
-            game_type = await _game_type(game)
-            game_state = await _game_state(game)
+            game_type = game['gameType']
+            game_state = game['status']['abstractGameState']
             if game_type == 'R':
                 game_data = await _parse_game(game)
                 if game_state == 'Preview':
@@ -246,13 +242,11 @@ class MLBTeam(MLB):
         return schedule
 
     async def _parse_team_info(self):
-        print("parsing team info")
         info = await _fetch_team_info(team_id=self.id)
         return info
 
     async def _fetch_schedule(self, team_id=None, season=None):
         """Get the full schedule for a given season"""
-        print("fetching schedule")
         if not team_id:
             team_id = self.id
         elif not season:
