@@ -141,21 +141,6 @@ class MLB:
         self._loop.close()
         return result
 
-    async def _parse_game(self, game):
-        double_header = await _double_header_check(game)
-        if not double_header:
-            game = game['games'][0]
-            game_type = await _game_type(game)
-            game_state = await _game_state(game)
-            if game_type == 'R':
-                game_data = await _parse_game(game)
-                if game_state == 'Preview':
-                    self.remaining_games.append(game_data)
-                elif game_state == 'Live':
-                    self.live_games.append(game_data)
-                elif game_state == 'Final':
-                    self.played_games.append(game_data)
-
     async def _parse_todays_games(self, game):
         game_type = await _game_type(game)
         game_state = await _game_state(game)
@@ -236,13 +221,28 @@ class MLBTeam(MLB):
             raise MLBException(f"Team {self._team} Not Found")
         return name
 
+    async def _parse_team_game(self, game):
+        double_header = await _double_header_check(game)
+        if not double_header:
+            game = game['games'][0]
+            game_type = await _game_type(game)
+            game_state = await _game_state(game)
+            if game_type == 'R':
+                game_data = await _parse_game(game)
+                if game_state == 'Preview':
+                    self.remaining_games.append(game_data)
+                elif game_state == 'Live':
+                    self.live_games.append(game_data)
+                elif game_state == 'Final':
+                    self.played_games.append(game_data)
+
     async def _parse_games(self, season=None):
         if not season:
             season = self.current_season
         schedule = await self._fetch_schedule(team_id=self.id, season=season)
         self.schedule = schedule
         for game in schedule:
-            await self._parse_game(game)
+            await self._parse_team_game(game)
         return schedule
 
     async def _parse_team_info(self):
