@@ -1,15 +1,14 @@
 import aiohttp
 import asyncio
-import datetime
 import json
 import os
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from dateutil import tz
 
 
 BASE_URL = "https://statsapi.mlb.com/api/v1/"
-DATE = datetime.datetime.now()
+DATE = datetime.now()
 
 
 class MLBException(Exception):
@@ -68,10 +67,10 @@ async def _convert_time(time):
     """Convert time from UTC to local and from 24 hour to 12"""
     from_zone = tz.tzutc()
     to_zone = tz.tzlocal()
-    utc = datetime.datetime.strptime(time, '%H:%M:%S')
+    utc = datetime.strptime(time, '%H:%M:%S')
     utc = utc.replace(tzinfo=from_zone)
     eastern = utc.astimezone(to_zone)
-    start_time = datetime.datetime.strftime(eastern, '%H:%M')
+    start_time = datetime.strftime(eastern, '%H:%M')
     if int(start_time.split(':')[0]):
         hour, minute = start_time.split(':')
         hour = int(hour) - 12
@@ -151,14 +150,14 @@ class MLB:
             self.todays_games.append(game_data)
 
     async def _gather_todays_games(self):
-        todays_date = datetime.datetime.strftime(DATE, '%Y-%m-%d')
+        todays_date = datetime.strftime(DATE, '%Y-%m-%d')
         games = await _fetch_games_by_date(start_date=todays_date, end_date=todays_date)
         if games:
             for game in games:
                 await self._parse_todays_games(game)
 
     async def _gather_yesterdays_games(self):
-        yesterday = datetime.datetime.strftime(DATE - timedelta(1), '%Y-%m-%d')
+        yesterday = datetime.strftime(DATE - timedelta(1), '%Y-%m-%d')
         games = await _fetch_games_by_date(start_date=yesterday, end_date=yesterday)
         if games:
             for game in games:
