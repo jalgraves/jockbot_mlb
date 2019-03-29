@@ -4,7 +4,12 @@ import datetime
 import json
 import os
 
+from datetime import timedelta
 from dateutil import tz
+
+
+BASE_URL = "https://statsapi.mlb.com/api/v1/"
+DATE = datetime.datetime.now()
 
 
 class MLBException(Exception):
@@ -27,12 +32,36 @@ async def _fetch_data(session, url, params=None):
 
 async def _fetch_team_info(team_id=None):
     """Get general team information"""
-    base_url = "https://statsapi.mlb.com/api/v1/"
-    url = f"{base_url}teams/{team_id}"
+    print("fetching team info")
+    url = f"{BASE_URL}teams/{team_id}"
     async with aiohttp.ClientSession() as session:
         data = await _fetch_data(session, url)
         team_info = data['teams'][0]
         return team_info
+
+
+async def _fetch_roster(team_id=None):
+    print("Fetching Roster")
+    url = f"{BASE_URL}teams/{team_id}/roster"
+    async with aiohttp.ClientSession() as session:
+        data = await _fetch_data(session, url)
+        return data['roster']
+
+
+async def _fetch_games_by_date(start_date=None, end_date=None):
+    params = {
+        "sportId": "1",
+        "startDate": start_date,
+        "endDate": end_date
+    }
+    url = f"{BASE_URL}schedule"
+    async with aiohttp.ClientSession() as session:
+        data = await _fetch_data(session, url, params=params)
+        if data['totalGames'] == 0:
+            games = []
+        else:
+            games = data['dates'][0]['games']
+        return games
 
 
 async def _convert_time(time):
@@ -52,7 +81,6 @@ async def _convert_time(time):
 async def _double_header_check(game):
     try:
         if len(game['games']) > 1:
-            print("eat shit")
             return True
     except KeyError:
         return
@@ -63,27 +91,6 @@ async def _game_type(game):
 async def _game_state(game):
     return game['status']['abstractGameState']
 
-async def _game_date(game):
-    return game['gameDate']
-
-async def _home_team(game):
-    return game['teams']['home']['team']['name']
-
-async def _away_team(game):
-    return game['teams']['away']['team']['name']
-
-async def _home_team_record(game):
-    return game['teams']['home']['leagueRecord']
-
-async def _away_team_record(game):
-    return game['teams']['away']['leagueRecord']
-
-async def _away_team_runs(game):
-    return game['teams']['away']['score']
-
-async def _home_team_runs(game):
-    return game['teams']['home']['score']
-
 async def _split_date_time(date_and_time):
     date, time = date_and_time.split('T')
     game_time = await _convert_time(time.strip('Z'))
@@ -91,46 +98,47 @@ async def _split_date_time(date_and_time):
 
 async def _parse_unplayed_game(game):
     game_data = {}
-    date = await _game_date(game)
+    date = game['gameDate']
     game_date, start_time = await _split_date_time(date)
     game_data['date'] = game_date
     game_data['start_time'] = start_time
-    game_data['home_team'] = await _home_team(game)
-    game_data['away_team'] = await _away_team(game)
-    game_data['home_team_record'] = await _home_team_record(game)
-    game_data['away_team_record'] = await _away_team_record(game)
+    game_data['home_team'] = game['teams']['home']['team']['name']
+    game_data['away_team'] = game['teams']['away']['team']['name']
+    game_data['home_team_record'] = game['teams']['home']['leagueRecord']
+    game_data['away_team_record'] = game['teams']['away']['leagueRecord']
     return game_data
 
 async def _parse_played_game(game):
     game_data = {}
-    date = await _game_date(game)
+    date = game['gameDate']
     game_date, start_time = await _split_date_time(date)
     game_data['date'] = game_date
     game_data['start_time'] = start_time
-    game_data['home_team'] = await _home_team(game)
-    game_data['away_team'] = await _away_team(game)
-    game_data['home_team_record'] = await _home_team_record(game)
-    game_data['away_team_record'] = await _away_team_record(game)
+    game_data['home_team'] = game['teams']['home']['team']['name']
+    game_data['away_team'] = game['teams']['away']['team']['name']
+    game_data['home_team_score'] = game['teams']['home']['score']
+    game_data['away_team_score'] = game['teams']['away']['score']
+    game_data['home_team_record'] = game['teams']['home']['leagueRecord']
+    game_data['away_team_record'] = game['teams']['away']['leagueRecord']
     return game_data
 
 async def _parse_live_game(game):
     game_data = {}
-    date = await _game_date(game)
+    date = game['gameDate']
     game_date, start_time = await _split_date_time(date)
     game_data['date'] = game_date
     game_data['start_time'] = start_time
-    game_data['home_team'] = await _home_team(game)
-    game_data['away_team'] = await _away_team(game)
-    game_data['home_team_record'] = await _home_team_record(game)
-    game_data['away_team_record'] = await _away_team_record(game)
-    game_data['home_team_runs'] = await _home_team_runs(game)
-    game_data['away_team_runs'] = await _away_team_runs(game)
+    game_data['home_team'] = game['teams']['home']['team']['name']
+    game_data['away_team'] = game['teams']['away']['team']['name']
+    game_data['home_team_score'] = game['teams']['home']['score']
+    game_data['away_team_score'] = game['teams']['away']['score']
+    game_data['home_team_record'] = game['teams']['home']['leagueRecord']
+    game_data['away_team_record'] = game['teams']['away']['leagueRecord']
     return game_data
 
 
 class MLB:
     """Create MLB object"""
-    base_url = "https://statsapi.mlb.com/api/v1/"
     team_ids = _team_ids()
 
     def __init__(self, team=None):
@@ -139,16 +147,17 @@ class MLB:
         self.todays_unplayed_games = []
         self.todays_completed_games = []
         self.live_games = []
+        self.yesterdays_games = []
 
-        self._gather_data(self._parse_todays_games)
+        self._gather_data(self._gather_todays_games)
+        self._gather_data(self._gather_yesterdays_games)
 
     def __repr__(self):
         return f"MLB Season: {self.current_season}"
 
     @property
     def current_season(self):
-        date = datetime.datetime.now()
-        return date.year
+        return DATE.year
 
     def _gather_data(self, job, **kwargs):
         if self._loop.is_closed():
@@ -157,21 +166,8 @@ class MLB:
         self._loop.close()
         return result
 
-    async def _fetch_todays_games(self):
-        url = f"{self.base_url}schedule?sportId=1"
-        async with aiohttp.ClientSession() as session:
-            data = await _fetch_data(session, url)
-            if data['totalGames'] == 0:
-                games = []
-            else:
-                games = data['dates'][0]['games']
-            return games
-
-    async def _parse_game(self, game, double_header_check=True):
-        if double_header_check:
-            double_header = await _double_header_check(game)
-        else:
-            double_header = None
+    async def _parse_game(self, game):
+        double_header = await _double_header_check(game)
         if not double_header:
             game = game['games'][0]
             game_type = await _game_type(game)
@@ -186,7 +182,7 @@ class MLB:
                 game_data = await _parse_live_game(game)
                 self.live_games.append(game_data)
 
-    async def _parse_today_games(self, game):
+    async def _parse_todays_games(self, game):
         game_type = await _game_type(game)
         game_state = await _game_state(game)
         if game_type == 'R' and game_state == 'Preview':
@@ -199,11 +195,20 @@ class MLB:
             game_data = await _parse_live_game(game)
             self.live_games.append(game_data)
 
-    async def _parse_todays_games(self):
-        games = await self._fetch_todays_games()
+    async def _gather_todays_games(self):
+        todays_date = datetime.datetime.strftime(DATE, '%Y-%m-%d')
+        games = await _fetch_games_by_date(start_date=todays_date, end_date=todays_date)
         if games:
             for game in games:
-                await self._parse_today_games(game)
+                await self._parse_todays_games(game)
+
+    async def _gather_yesterdays_games(self):
+        yesterday = datetime.datetime.strftime(DATE - timedelta(1), '%Y-%m-%d')
+        games = await _fetch_games_by_date(start_date=yesterday, end_date=yesterday)
+        if games:
+            for game in games:
+                game_data = await _parse_played_game(game)
+                self.yesterdays_games.append(game_data)
 
 
 class MLBTeam(MLB):
@@ -215,7 +220,7 @@ class MLBTeam(MLB):
         self.played_games = []
         self.remaining_games = []
         self.info = self._gather_data(self._parse_team_info)
-        self.roster = self._gather_data(self._fetch_roster, team_id=self.id)
+        self.roster = self._gather_data(_fetch_roster, team_id=self.id)
 
         self._gather_data(self._parse_games)
 
@@ -265,11 +270,13 @@ class MLBTeam(MLB):
         return schedule
 
     async def _parse_team_info(self):
+        print("parsing team info")
         info = await _fetch_team_info(team_id=self.id)
         return info
 
     async def _fetch_schedule(self, team_id=None, season=None):
         """Get the full schedule for a given season"""
+        print("fetching schedule")
         if not team_id:
             team_id = self.id
         elif not season:
@@ -280,17 +287,11 @@ class MLBTeam(MLB):
             "startDate": f"{season}-01-01",
             "endDate": f"{season}-12-31"
         }
-        url = f"{self.base_url}schedule"
+        url = f"{BASE_URL}schedule"
         async with aiohttp.ClientSession() as session:
             data = await _fetch_data(session, url, params=params)
             games = data['dates']
             return games
-
-    async def _fetch_roster(self, team_id='111'):
-        url = f"{self.base_url}teams/{team_id}/roster"
-        async with aiohttp.ClientSession() as session:
-            data = await _fetch_data(session, url)
-            return data['roster']
 
 
 if __name__ == '__main__':
@@ -298,5 +299,6 @@ if __name__ == '__main__':
     s = time.perf_counter()
     elapsed = time.perf_counter() - s
     mlb = MLB()
-    print(json.dumps(mlb.live_games, indent=2))
+    sox = MLBTeam('red sox')
+    print(json.dumps(sox.played_games, indent=2))
     print(f"{__file__} executed in {elapsed:0.2f} seconds.")

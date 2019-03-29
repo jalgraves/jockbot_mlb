@@ -1,0 +1,9 @@
+version: '3.5'
+
+services:
+  jockbot_mlb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: "jockbot_mlb"
+    container_name: jockbot_mlb
