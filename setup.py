@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='jockbot_mlb',
-      version='0.1',
+      version='0.2',
       description='Retrieve info from MLB API',
       url='http://github.com/jalgraves/jockbot_mlb',
       author='Jonny Graves',
@@ -9,6 +9,6 @@ setup(name='jockbot_mlb',
       license='MIT',
       packages=['jockbot_mlb'],
       zip_safe=False,
-      install_requires=['aiohttp'],
+      install_requires=['aiohttp', 'python-dateutil'],
       include_package_data=True
       )
