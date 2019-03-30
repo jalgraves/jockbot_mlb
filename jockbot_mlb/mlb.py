@@ -91,11 +91,13 @@ async def _split_date_time(date_and_time):
     game_time = await _convert_time(time.strip('Z'))
     return date, game_time
 
+
 async def _fetch_linescore(game_id):
     url = f"{BASE_URL}game/{game_id}/linescore"
     async with aiohttp.ClientSession() as session:
         data = await _fetch_data(session, url)
         return data
+
 
 async def _parse_game(game, game_state=None):
     game_data = {}
@@ -159,15 +161,15 @@ class MLB:
             self.todays_games.append(game_data)
 
     async def _gather_todays_games(self):
-        todays_date = datetime.strftime(DATE, '%Y-%m-%d')
-        games = await _fetch_games_by_date(start_date=todays_date, end_date=todays_date)
+        date = datetime.strftime(DATE, '%Y-%m-%d')
+        games = await _fetch_games_by_date(start_date=date, end_date=date)
         if games:
             for game in games:
                 await self._parse_todays_games(game)
 
     async def _gather_yesterdays_games(self):
-        yesterday = datetime.strftime(DATE - timedelta(1), '%Y-%m-%d')
-        games = await _fetch_games_by_date(start_date=yesterday, end_date=yesterday)
+        date = datetime.strftime(DATE - timedelta(1), '%Y-%m-%d')
+        games = await _fetch_games_by_date(start_date=date, end_date=date)
         if games:
             for game in games:
                 game_data = await _parse_game(game)
