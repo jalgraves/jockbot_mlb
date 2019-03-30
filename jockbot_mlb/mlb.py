@@ -91,10 +91,19 @@ async def _split_date_time(date_and_time):
     game_time = await _convert_time(time.strip('Z'))
     return date, game_time
 
-async def _parse_game(game):
+async def _fetch_linescore(game_id):
+    url = f"{BASE_URL}game/{game_id}/linescore"
+    async with aiohttp.ClientSession() as session:
+        data = await _fetch_data(session, url)
+        return data
+
+async def _parse_game(game, game_state=None):
     game_data = {}
     date = game['gameDate']
     game_date, start_time = await _split_date_time(date)
+    game_data['state'] = game_state
+    if game_state == 'Live' or game_state == 'Final':
+        game_data['linescore'] = await _fetch_linescore(game['gamePk'])
     game_data['date'] = game_date
     game_data['start_time'] = start_time
     game_data['home_team'] = game['teams']['home']['team']['name']
@@ -140,7 +149,7 @@ class MLB:
         game_type = game['gameType']
         game_state = game['status']['abstractGameState']
         if game_type == 'R':
-            game_data = await _parse_game(game)
+            game_data = await _parse_game(game, game_state=game_state)
             if game_state == 'Preview':
                 self.todays_unplayed_games.append(game_data)
             elif game_state == 'Live':
@@ -223,7 +232,7 @@ class MLBTeam(MLB):
             game_type = game['gameType']
             game_state = game['status']['abstractGameState']
             if game_type == 'R':
-                game_data = await _parse_game(game)
+                game_data = await _parse_game(game, game_state=game_state)
                 if game_state == 'Preview':
                     self.remaining_games.append(game_data)
                 elif game_state == 'Live':
@@ -268,6 +277,5 @@ if __name__ == '__main__':
     s = time.perf_counter()
     elapsed = time.perf_counter() - s
     mlb = MLB()
-    sox = MLBTeam('red sox')
-    print(mlb.yesterdays_games)
+    print(json.dumps(mlb.todays_games, indent=2))
     print(f"{__file__} executed in {elapsed:0.2f} seconds.")
