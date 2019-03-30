@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='jockbot_mlb',
-      version='0.4',
+      version='0.5',
       description='Retrieve info from MLB API',
       url='http://github.com/jalgraves/jockbot_mlb',
       author='Jonny Graves',
