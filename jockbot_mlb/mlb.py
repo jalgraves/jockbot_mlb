@@ -1,6 +1,7 @@
 import aiohttp
 import asyncio
 import json
+import logging
 import os
 
 from datetime import datetime, timedelta
@@ -26,7 +27,11 @@ def _team_ids():
 
 async def _fetch_data(session, url, params=None):
     async with session.get(url, params=params) as response:
-        return await response.json()
+        try:
+            data = await response.json()
+        except aiohttp.client_exceptions.ClientConnectorError:
+            data = await response.json()
+        return data
 
 
 async def _fetch_team_info(team_id=None):
@@ -66,15 +71,13 @@ async def _fetch_games_by_date(start_date=None, end_date=None):
 async def _convert_time(time):
     """Convert time from UTC to local and from 24 hour to 12"""
     from_zone = tz.tzutc()
-    to_zone = tz.tzlocal()
-    utc = datetime.strptime(time, '%H:%M:%S')
+    to_zone = tz.gettz('US/Eastern')
+    utc = datetime.strptime(time, '%H:%M:%S') + timedelta(hours=1)
     utc = utc.replace(tzinfo=from_zone)
     eastern = utc.astimezone(to_zone)
-    start_time = datetime.strftime(eastern, '%H:%M')
-    if int(start_time.split(':')[0]):
-        hour, minute = start_time.split(':')
-        hour = int(hour) - 12
-        start_time = f"{hour}:{minute}"
+    start_time = datetime.strftime(eastern, '%I:%M')
+    if start_time[0] == '0':
+        start_time = start_time[1:]
     return start_time
 
 
@@ -104,6 +107,7 @@ async def _parse_game(game, game_state=None):
     date = game['gameDate']
     game_date, start_time = await _split_date_time(date)
     game_data['state'] = game_state
+    game_data['detailed_state'] = game['status']['detailedState']
     if game_state == 'Live' or game_state == 'Final':
         game_data['linescore'] = await _fetch_linescore(game['gamePk'])
     game_data['date'] = game_date
@@ -117,13 +121,21 @@ async def _parse_game(game, game_state=None):
     return game_data
 
 
+def _get_loop():
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+    return loop
+
+
 class MLB:
     """Create MLB object"""
     team_ids = _team_ids()
 
     def __init__(self, team=None):
         self._team = team
-        self._loop = asyncio.get_event_loop()
+        self._loop = _get_loop()
         self.todays_games = []
         self.todays_unplayed_games = []
         self.todays_completed_games = []
